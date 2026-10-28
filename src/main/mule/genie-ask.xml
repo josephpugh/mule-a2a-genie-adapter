@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+      xmlns:a2a="http://www.mulesoft.org/schema/mule/a2a"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core https://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http https://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core https://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/objectstore https://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd
+        http://www.mulesoft.org/schema/mule/a2a https://www.mulesoft.org/schema/mule/a2a/current/mule-a2a.xsd">
+
+    <flow name="genie-ask-subflow" doc:name="Genie Ask Subflow">
+        <set-variable variableName="genieSpaceId" value="#[p('genie.space.id')]"/>
+        <set-variable variableName="genieWorkspaceHost" value="#[p('genie.workspace.host')]"/>
+        <set-variable variableName="genieAuthMode" value="#[p('genie.auth.mode')]"/>
+        <set-variable variableName="genieAuthToken" value="#[p('genie.auth.token')]"/>
+        <set-variable variableName="currentToken" value="#[vars.genieToken default vars.genieAuthToken]"/>
+        <choice>
+            <when expression="#[isEmpty(vars.genieQuestionText)]">
+                <a2a:update-task-status config-ref="A2A_Server_Config" doc:name="Status: rejected" status="rejected" message="No text in message" metadata="#[{ error_code: 'bridge.empty_message' }]"/>
+                <raise-error type="BRIDGE:EMPTY_MESSAGE" description="No text in message"/>
+            </when>
+            <otherwise>
+                <set-variable variableName="contentText" value="#[vars.genieQuestionText]"/>
+                <flow-ref name="resolve-or-start-conversation-subflow"/>
+                <a2a:update-task-status config-ref="A2A_Server_Config" doc:name="Status: working" status="working" message="Asking Genie" metadata="#[{ kind: 'progress', genie_status: 'SUBMITTED' }]"/>
+                <flow-ref name="poll-genie-message-subflow"/>
+                <flow-ref name="finalize-genie-result-subflow"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="resolve-or-start-conversation-subflow" doc:name="Resolve or Start Conversation">
+        <objectstore:retrieve key="#[vars.contextId]" objectStore="ObjectStore_Config" doc:name="Find context mapping"/>
+        <choice>
+            <when expression="#[payload != null and payload.conversation_id != null]">
+                <set-variable variableName="conversationId" value="#[payload.conversation_id]"/>
+                <flow-ref name="create-genie-message-subflow"/>
+            </when>
+            <otherwise>
+                <flow-ref name="start-genie-conversation-subflow"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="start-genie-conversation-subflow" doc:name="Start Genie Conversation">
+        <http:request method="POST" config-ref="Databricks_Request_Config" path="/genie/spaces/#[vars.genieSpaceId]/start-conversation" sendBodyMode="ALWAYS" doc:name="Start conversation">
+            <http:headers><![CDATA[#[{
+                'Authorization': 'Bearer ' ++ vars.currentToken,
+                'X-Request-Id': vars.requestId default 'bridge-request'
+            }]]]></http:headers>
+            <http:body><![CDATA[#[{
+                content: vars.contentText
+            }]]]></http:body>
+        </http:request>
+        <set-variable variableName="conversationId" value="#[payload.conversation_id]"/>
+        <set-variable variableName="messageId" value="#[payload.message_id]"/>
+        <set-variable variableName="contextId" value="#[vars.contextId]"/>
+        <objectstore:store key="#[vars.contextId]" value="#[{ space_id: vars.genieSpaceId, conversation_id: vars.conversationId }]" objectStore="ObjectStore_Config" expiration="PT24H" doc:name="Store context mapping"/>
+        <a2a:set-task-metadata config-ref="A2A_Server_Config" doc:name="Set task metadata" metadata="#[{ 'genie.space_id': vars.genieSpaceId, 'genie.conversation_id': vars.conversationId, 'genie.message_id': vars.messageId, 'genie.workspace_host': vars.genieWorkspaceHost, 'bridge.agent_slug': vars.genieSpaceId, 'bridge.version': p('genie.bridge.version'), 'bridge.duration_ms': 0, 'bridge.poll_count': 0, 'genie.conversation_restarted': false }]"/>
+    </flow>
+
+    <flow name="create-genie-message-subflow" doc:name="Create Genie Message">
+        <http:request method="POST" config-ref="Databricks_Request_Config" path="/genie/spaces/#[vars.genieSpaceId]/conversations/#[vars.conversationId]/messages" sendBodyMode="ALWAYS" doc:name="Create message">
+            <http:headers><![CDATA[#[{
+                'Authorization': 'Bearer ' ++ vars.currentToken,
+                'X-Request-Id': vars.requestId default 'bridge-request'
+            }]]]></http:headers>
+            <http:body><![CDATA[#[{
+                content: vars.contentText
+            }]]]></http:body>
+        </http:request>
+        <set-variable variableName="messageId" value="#[payload.message_id]"/>
+        <a2a:set-task-metadata config-ref="A2A_Server_Config" doc:name="Set task metadata" metadata="#[{ 'genie.space_id': vars.genieSpaceId, 'genie.conversation_id': vars.conversationId, 'genie.message_id': vars.messageId, 'genie.workspace_host': vars.genieWorkspaceHost, 'bridge.agent_slug': vars.genieSpaceId, 'bridge.version': p('genie.bridge.version'), 'bridge.duration_ms': 0, 'bridge.poll_count': 0, 'genie.conversation_restarted': false }]"/>
+    </flow>
+
+    <flow name="poll-genie-message-subflow" doc:name="Poll Genie Message">
+        <until-successful maxRetries="#[p('genie.poll.maxAttempts')]" millisBetweenRetries="#[p('genie.poll.intervalMs')]" doc:name="Until successful">
+            <try>
+                <http:request method="GET" config-ref="Databricks_Request_Config" path="/genie/spaces/#[vars.genieSpaceId]/conversations/#[vars.conversationId]/messages/#[vars.messageId]" doc:name="Get Genie message status">
+                    <http:headers><![CDATA[#[{
+                        'Authorization': 'Bearer ' ++ vars.currentToken,
+                        'X-Request-Id': vars.requestId default 'bridge-request'
+                    }]]]></http:headers>
+                </http:request>
+                <choice>
+                    <when expression="#[payload.status == 'COMPLETED' or payload.status == 'FAILED' or payload.status == 'CANCELLED' or payload.status == 'QUERY_RESULT_EXPIRED']">
+                        <set-variable variableName="finalGenieStatus" value="#[payload.status]"/>
+                        <set-variable variableName="lastGenieStatus" value="#[payload.status]"/>
+                        <successful/>
+                    </when>
+                    <otherwise>
+                        <set-variable variableName="lastGenieStatus" value="#[payload.status]"/>
+                        <raise-error type="GENIE:IN_PROGRESS" description="Genie still working"/>
+                    </otherwise>
+                </choice>
+                <error-handler>
+                    <on-error-propagate/>
+                </error-handler>
+            </try>
+        </until-successful>
+    </flow>
+
+    <flow name="finalize-genie-result-subflow" doc:name="Finalize Genie Result">
+        <choice>
+            <when expression="#[vars.finalGenieStatus == 'COMPLETED']">
+                <set-variable variableName="artifactParts" value="#[[{ kind: 'answer-text', text: 'Done' }]]"/>
+                <a2a:update-task-artifact config-ref="A2A_Server_Config" doc:name="Update task artifact" artifactId="#[vars.messageId]" name="genie-response" parts="#[vars.artifactParts]"/>
+                <a2a:update-task-status config-ref="A2A_Server_Config" doc:name="Status: completed" status="completed" message="Genie completed" metadata="#[{ 'error_code': 'none' }]"/>
+            </when>
+            <otherwise>
+                <a2a:update-task-status config-ref="A2A_Server_Config" doc:name="Status: failed" status="failed" message="Genie could not answer" metadata="#[{ 'error_code': 'genie.failed', 'genie_error_type': 'unknown' }]"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+</mule>

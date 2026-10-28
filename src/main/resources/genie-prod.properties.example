@@ -1,0 +1,38 @@
+# Example production values for the Genie A2A bridge.
+# Secure values (tokens) must be stored in the platform secure properties store.
+
+env=prod
+
+genie.agent.slug=your-space-slug
+genie.workspace.host=https://<workspace>.azuredatabricks.net
+genie.space.id=<space-id>
+genie.auth.mode=passthrough
+genie.auth.token=
+genie.caller.header=X-User-Id
+
+genie.poll.intervalMs=2000
+genie.poll.maxAttempts=150
+genie.retry.maxAttempts=3
+genie.retry.initialMs=500
+genie.http.timeoutMs=30000
+genie.table.max_rows=200
+genie.table.card_rows=20
+genie.include_reasoning=false
+genie.clarification.detect=true
+genie.context.ttl=PT24H
+genie.log.content=false
+
+genie.card.name=Your Genie
+
+genie.card.description=Ask your Databricks Genie space for answers, SQL and table data.
+genie.card.url=https://gateway.example.com/a2a/genie/your-space-slug
+genie.card.version=1.0.0
+genie.card.provider=Your Organization
+
+genie.card.skill.name=Ask Genie
+genie.card.skill.description=Ask the Genie space for a narrative answer and the underlying query.
+genie.card.skill.example1=Summarize this quarter's sales.
+genie.card.skill.example2=Which products should we focus on next?
+
+a2a.listener.port=8081
+a2a.agent.path=/a2a/genie/${genie.agent.slug}

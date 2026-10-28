@@ -1,0 +1,50 @@
+{
+  "name": "${genie.card.name}",
+  "description": "${genie.card.description}",
+  "url": "${genie.card.url}",
+  "version": "${genie.card.version}",
+  "provider": {
+    "organization": "${genie.card.provider}"
+  },
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain", "application/json"],
+  "securitySchemes": {
+    "bearer": {
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "JWT"
+    }
+  },
+  "security": [
+    { "bearer": [] }
+  ],
+  "skills": [
+    {
+      "id": "ask-data",
+      "name": "${genie.card.skill.name}",
+      "description": "${genie.card.skill.description}",
+      "tags": ["databricks", "genie", "sql", "${genie.agent.slug}"],
+      "examples": [
+        "${genie.card.skill.example1}",
+        "${genie.card.skill.example2}"
+      ],
+      "inputModes": ["text/plain"],
+      "outputModes": ["text/plain", "application/json"]
+    }
+  ],
+  "interfaces": [
+    {
+      "type": "jsonrpc",
+      "url": "${genie.card.url}/jsonrpc"
+    },
+    {
+      "type": "http",
+      "url": "${genie.card.url}"
+    }
+  ]
+}

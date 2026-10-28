@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+      xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+      xmlns:a2a="http://www.mulesoft.org/schema/mule/a2a"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core https://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http https://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/secure-properties https://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+        http://www.mulesoft.org/schema/mule/objectstore https://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd
+        http://www.mulesoft.org/schema/mule/a2a https://www.mulesoft.org/schema/mule/a2a/current/mule-a2a.xsd
+        http://www.mulesoft.org/schema/mule/ee/core https://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <configuration-properties file="genie-dev.properties"/>
+
+    <secure-properties:config name="SecurePropertiesConfig" file="genie-dev.properties" key="${mule.env.key}" doc:name="Secure Properties Config"/>
+
+    <http:listener-config name="HTTP_Listener_config">
+        <http:listener-connection host="0.0.0.0" port="${a2a.listener.port}"/>
+    </http:listener-config>
+
+    <http:request-config name="Databricks_Request_Config" basePath="/api/2.0">
+        <http:request-connection host="${genie.workspace.host}" protocol="HTTPS" responseTimeout="${genie.http.timeoutMs}"/>
+    </http:request-config>
+
+    <a2a:server-config name="A2A_Server_Config"
+                       listenerConfig="HTTP_Listener_config"
+                       agentPath="${a2a.agent.path}"
+                       cardJson="${file:agent-card.json}"
+                       doc:name="A2A Server Config"/>
+
+    <objectstore:config name="ObjectStore_Config" doc:name="Object Store Config" persistent="false"/>
+
+    <ee:object-store-caching-strategy name="ContextCacheStrategy" doc:name="Context Cache Strategy" />
+
+    <global-property name="genie.bridge.version" value="1.0.0" />
+    <global-property name="genie.bridge.agent.slug" value="${genie.agent.slug}" />
+
+</mule>

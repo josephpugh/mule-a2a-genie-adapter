@@ -1,0 +1,7 @@
+target/
+.vscode/
+.idea/
+.DS_Store
+*.log
+src/main/resources/genie-prod.properties
+.github/modernize/java-upgrade/

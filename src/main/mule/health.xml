@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core https://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http https://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <flow name="health-endpoint" doc:name="Health endpoint">
+        <http:listener config-ref="HTTP_Listener_config" path="/health" allowedMethods="GET" doc:name="Health listener" />
+        <set-payload value="#[{ status: 'UP' }]"/>
+    </flow>
+
+    <flow name="ready-endpoint" doc:name="Readiness endpoint">
+        <http:listener config-ref="HTTP_Listener_config" path="/ready" allowedMethods="GET" doc:name="Ready listener" />
+        <set-payload value="#[{ status: 'READY' }]"/>
+    </flow>
+
+</mule>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:a2a="http://www.mulesoft.org/schema/mule/a2a"
+      xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core https://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http https://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/a2a https://www.mulesoft.org/schema/mule/a2a/current/mule-a2a.xsd
+        http://www.mulesoft.org/schema/mule/objectstore https://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd
+        http://www.mulesoft.org/schema/mule/ee/core https://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <flow name="task-authorizer-flow" doc:name="Task Authorizer Flow">
+        <a2a:task-authorizer-listener config-ref="A2A_Server_Config" doc:name="Task Authorizer Listener"/>
+        <choice>
+            <when expression="#[attributes.operationName == 'SendMessage' or attributes.operationName == 'GetTask' or attributes.operationName == 'SubscribeToTask' or attributes.operationName == 'ListTasks']">
+                <set-variable variableName="authorizationHeader" value="#[(attributes.headers?['authorization'] default '') as String]"/>
+                <choice>
+                    <when expression="#[vars.authorizationHeader startsWith 'Bearer ']">
+                        <set-variable variableName="genieToken" value="#[vars.authorizationHeader replace 'Bearer ' with '']"/>
+                        <logger level="INFO" category="com.edwardjones.ai.genie.bridge" message="Authorization accepted for operation #[attributes.operationName]"/>
+                    </when>
+                    <otherwise>
+                        <raise-error type="A2A:UNAUTHORIZED" description="Missing or malformed Authorization header"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <logger level="WARN" category="com.edwardjones.ai.genie.bridge" message="Unsupported operation #[attributes.operationName]"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="task-listener-flow" doc:name="Task Listener Flow">
+        <a2a:task-listener config-ref="A2A_Server_Config" doc:name="Task Listener"/>
+        <set-variable variableName="genieQuestionText" value="#[(payload.message.parts default []) filter ($.type == 'text' or $.kind == 'text') map $.text joinBy '\n']"/>
+        <set-variable variableName="taskId" value="#[attributes.taskId]"/>
+        <set-variable variableName="contextId" value="#[attributes.contextId]"/>
+        <set-variable variableName="requestHeaders" value="#[attributes.headers default {}]"/>
+        <set-variable variableName="requestId" value="#[(attributes.headers?['x-correlation-id'] default 'none') as String]"/>
+        <try>
+            <flow-ref name="genie-ask-subflow"/>
+            <error-handler>
+                <on-error-continue>
+                    <set-variable variableName="errorCode" value="#['bridge.internal']"/>
+                    <set-payload value="#[{ status: 'failed', message: 'Bridge error: ' ++ error.description default 'Bridge error', metadata: { error_code: 'bridge.internal' } }]"/>
+                    <a2a:update-task-status config-ref="A2A_Server_Config" doc:name="Status: failed"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </flow>
+
+</mule>
